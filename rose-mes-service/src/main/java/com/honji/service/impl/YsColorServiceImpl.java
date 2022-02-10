@@ -41,16 +41,23 @@ public class YsColorServiceImpl extends ServiceImpl<YsColorMapper, YsColor> impl
     @DS("mes")
     @Transactional
     @Override
-    public void sync(List<YsColor> newColors, List<YsColor> removeColors) {
+    public void sync(List<YsColor> newColors, List<YsColor> updateColors, List<YsColor> removeColors) {
+
+
+        if (!newColors.isEmpty()) {
+            log.info("YsColor新增数量 == {}", newColors.size());
+            ysColorService.saveList(newColors);
+        }
+
+        if (!updateColors.isEmpty()) {
+            log.info("YsColor更新数量 == {}", updateColors.size());
+            ysColorService.updateBatchById(updateColors);
+        }
 
         if (!removeColors.isEmpty()) {
             log.info("YsColor删除数量 == {}", removeColors.size());
             List<String> ids = removeColors.stream().map(YsColor :: getId).collect(Collectors.toList());
             ysColorService.removeByIds(ids);
-        }
-        if (!newColors.isEmpty()) {
-            log.info("YsColor新增数量 == {}", newColors.size());
-            ysColorService.saveList(newColors);
         }
 
     }

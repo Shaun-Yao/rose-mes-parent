@@ -78,6 +78,7 @@ public class SynchApplication {
         List<Color> colors = colorService.list();
         List<YsColor> ysColors = ysColorService.selectAll();
         List<YsColor> newColors = new ArrayList<>();
+        List<YsColor> updateColors = new ArrayList<>();
         List<YsColor> removeColors = new ArrayList<>();
         for(Color color : colors) {
             boolean isExist = false;
@@ -88,15 +89,15 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新
                     if (!color.getEditDate().isEqual(ysColor.getEditDate())) {
-                        //有更新则要先删除再新增，所以加入到removeColors，删除放到后面调用sevice执行
-                        removeColors.add(ysColor);
-                        isExist = false;//设置为不存在，下面代码会加入到新增list
+                        //更新暂时只有code,name
+                        ysColor.setCode(code).setName(color.getName())
+                                .setEditDate(color.getEditDate());
+                        updateColors.add(ysColor);
                     }
                     break;//找到后无需再循环
                 }
             }
             if(!isExist) {//不存在则添加
-
                 YsColor newColor = new YsColor().setCode(code)
                         .setName(color.getName()).setEditDate(color.getEditDate());
                 newColors.add(newColor);
@@ -112,7 +113,7 @@ public class SynchApplication {
             }
         }
         //执行数据库操作
-        ysColorService.sync(newColors, removeColors);
+        ysColorService.sync(newColors, updateColors, removeColors);
 
     }
 }
