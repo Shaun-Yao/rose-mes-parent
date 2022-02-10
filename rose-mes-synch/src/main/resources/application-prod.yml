@@ -1,0 +1,57 @@
+server:
+  port: 9006
+
+spring:
+  datasource:
+    url: jdbc:sqlserver://10.10.10.220;databaseName=LYGD001;allowMultiQueries=true
+      username: hanson
+      password: HJ@hanson123
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  thymeleaf:
+      cache: false
+      mode: HTML
+
+
+mybatis:
+  type-aliases-package: com.honji
+
+
+mybatis-plus:
+    # 支持统配符 * 或者 ; 分割
+    typeEnumsPackage: com.honji.enums
+    configuration:
+      default-enum-type-handler: org.apache.ibatis.type.EnumOrdinalTypeHandler
+    global-config:
+          db-config:
+            update-strategy: ignored #更新所有字段
+
+pagehelper:
+  helper-dialect: sqlserver
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+
+http-pool:
+  # 连接池最大连接数
+  max-total: 100
+  # 每个rount请求的最大连接数
+  default-max-per-route: 20
+  # 空闲多长时间（毫秒）来校验连接的有效性
+  validate-after-inactivity: 2000
+  # 建立连接的最大超时时间（毫秒）
+  connect-timeout: 20000
+  # 获取连接的最大超时时间（毫秒）
+  connection-request-timeout: 20000
+  # 与服务端保持连接的最大时间（毫秒）
+  socket-timeout: 20000
+
+
+feign:
+  httpclient:
+    enabled: true
+
+logging:
+  file: logs/synch.log
+  level:
+    com.honji.mapper: INFO
+    root: INFO
