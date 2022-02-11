@@ -12,11 +12,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-public class Color {
+public class Unit {
 
     /**
      * 编码
      */
+    @TableField(value = "UnitID")
     private String code;
 
     /**

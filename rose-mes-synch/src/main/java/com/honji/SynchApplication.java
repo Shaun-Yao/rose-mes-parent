@@ -1,9 +1,7 @@
 package com.honji;
 
-import com.honji.entity.Color;
-import com.honji.entity.YsColor;
-import com.honji.service.IColorService;
-import com.honji.service.IYsColorService;
+import com.honji.entity.*;
+import com.honji.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,58 +21,114 @@ import java.util.List;
 public class SynchApplication {
     @Autowired
     private IColorService colorService;
+    @Autowired
+    private ISizeService sizeService;
+    @Autowired
+    private IUnitService unitService;
 
     @Autowired
     private IYsColorService ysColorService;
-
-//    @Autowired
-//    Environment env;
+    @Autowired
+    private IYsSizeService ysSizeService;
+    @Autowired
+    private IYsUnitService ysUnitService;
 
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
 
     }
 
-//    @PostConstruct
-//    void started() {
-//        log.info("timezone setup");
-//        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
-//    }
-/*
 
-    @Bean
-    @Primary
-    @ConfigurationProperties(prefix = "spring.datasource")
-    public DataSource primaryDataSource() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName(env.getProperty("spring.datasource.driver-class-name"));
-        dataSource.setUrl(env.getProperty("spring.datasource.url"));
-        dataSource.setUsername(env.getProperty("spring.datasource.username"));
-        dataSource.setPassword(env.getProperty("spring.datasource.password"));
-        return  dataSource;
-//        return DataSourceBuilder.create().build();
+    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    public void syncUnit() {
+        List<Unit> units = unitService.list();
+        List<YsUnit> ysUnits = ysUnitService.selectAll();
+        List<YsUnit> newUnits = new ArrayList<>();
+        List<YsUnit> updateUnits = new ArrayList<>();
+        List<YsUnit> removeUnits = new ArrayList<>();
+        for(Unit unit : units) {
+            boolean isExist = false;
+            String code = unit.getCode();
+            for(YsUnit ysUnit : ysUnits) {
+                String ysCode = ysUnit.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新
+                    if (!unit.getEditDate().isEqual(ysUnit.getEditDate())) {
+                        //更新暂时只有code,name
+                        ysUnit.setCode(code).setName(unit.getName())
+                                .setEditDate(unit.getEditDate());
+                        updateUnits.add(ysUnit);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if(!isExist) {//不存在则添加
+                YsUnit newUnit = new YsUnit().setCode(code)
+                        .setName(unit.getName()).setEditDate(unit.getEditDate());
+                newUnits.add(newUnit);
+            }
+        }
+
+        //判断是否删除
+        for(YsUnit ysUnit : ysUnits) {
+            String ysCode = ysUnit.getCode();
+            boolean isExist = units.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeUnits.add(ysUnit);
+            }
+        }
+        //执行数据库操作
+        ysUnitService.sync(newUnits, updateUnits, removeUnits);
+
     }
 
-    @Bean(name = "mesDatasource")
-    @ConfigurationProperties(prefix = "spring.mes-datasource")
-    public DataSource secondDataSource() {
-        return DataSourceBuilder.create().build();
+    //@Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    public void syncSize() {
+        List<Size> sizes = sizeService.list();
+        List<YsSize> ysSizes = ysSizeService.selectAll();
+        List<YsSize> newSizes = new ArrayList<>();
+        List<YsSize> updateSizes = new ArrayList<>();
+        List<YsSize> removeSizes = new ArrayList<>();
+        for(Size size : sizes) {
+            boolean isExist = false;
+            String code = size.getCode();
+            for(YsSize ysSize : ysSizes) {
+                String ysCode = ysSize.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新
+                    if (!size.getEditDate().isEqual(ysSize.getEditDate())) {
+                        //更新暂时只有code,name
+                        ysSize.setCode(code).setName(size.getName())
+                                .setEditDate(size.getEditDate());
+                        updateSizes.add(ysSize);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if(!isExist) {//不存在则添加
+                YsSize newSize = new YsSize().setCode(code)
+                        .setName(size.getName()).setEditDate(size.getEditDate());
+                newSizes.add(newSize);
+            }
+        }
+
+        //判断是否删除
+        for(YsSize ysSize : ysSizes) {
+            String ysCode = ysSize.getCode();
+            boolean isExist = sizes.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeSizes.add(ysSize);
+            }
+        }
+        //执行数据库操作
+        ysSizeService.sync(newSizes, updateSizes, removeSizes);
+
     }
 
-    @Bean
-    @Primary
-    public JdbcTemplate primaryJdbcTemplate(DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
-    }
-
-    @Bean(name = "mesJdbcTemplate")
-    public JdbcTemplate secondJdbcTemplate(@Qualifier("mesDatasource") DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
-    }
-*/
-
-    @Scheduled(fixedDelay = 600 * 1000)  //1分钟同步一次
-    public void syncOffLineBalance() {
+    //@Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    public void syncColor() {
         List<Color> colors = colorService.list();
         List<YsColor> ysColors = ysColorService.selectAll();
         List<YsColor> newColors = new ArrayList<>();

@@ -1,6 +1,7 @@
 package com.honji.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,16 +13,19 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-public class Color {
+@TableName(value = "SizeCaption")
+public class Size {
 
     /**
      * 编码
      */
+    @TableField(value = "SizeID")
     private String code;
 
     /**
      * 名字
      */
+    @TableField(value = "SizeCaption")
     private String name;
 
     /**
