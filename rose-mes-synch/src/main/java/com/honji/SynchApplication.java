@@ -1,5 +1,6 @@
 package com.honji;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.honji.entity.*;
 import com.honji.service.*;
 import lombok.extern.slf4j.Slf4j;
@@ -33,11 +34,102 @@ public class SynchApplication {
     @Autowired
     private IYsUnitService ysUnitService;
 
+    @Autowired
+    private IInventoryClassService inventoryClassService;
+    @Autowired
+    private IYsInventoryClassService ysInventoryClassService;
+
+
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
 
     }
 
+    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    public void syncInventoryClass() {
+        QueryWrapper<InventoryClass> queryWrapper = new QueryWrapper<>();
+        queryWrapper.ne("seriesid", "1");//排队“货品分类”菜单
+        List<InventoryClass> inventoryClasses = inventoryClassService.list(queryWrapper);
+        List<YsInventoryClass> ysInventoryClasses = ysInventoryClassService.selectAll();
+        List<YsInventoryClass> newInventoryClasses = new ArrayList<>();
+        List<YsInventoryClass> updateInventoryClasses = new ArrayList<>();
+        List<YsInventoryClass> removeInventoryClasses = new ArrayList<>();
+        for(InventoryClass inventoryClass : inventoryClasses) {
+            boolean isExist = false;
+            String code = inventoryClass.getCode();
+            for (YsInventoryClass ysInventoryClass : ysInventoryClasses) {
+                String ysCode = ysInventoryClass.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新,代码相同其它属性有修改
+                    if (!inventoryClass.getEditDate().isEqual(ysInventoryClass.getEditDate())) {
+                        //更新暂时只有name，editDate
+                        ysInventoryClass.setName(inventoryClass.getName())
+                                .setEditDate(inventoryClass.getEditDate());
+                        updateInventoryClasses.add(ysInventoryClass);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsInventoryClass newInventoryClass = new YsInventoryClass().setCode(code)
+                        .setName(inventoryClass.getName()).setEditDate(inventoryClass.getEditDate());
+                String treeId = inventoryClass.getTreeId();
+                String parentId = null;
+                switch (treeId.length()) {
+                    case 3://3位id则为1级菜单，无父菜单
+                        parentId = "0";
+                        break;
+                    case 5://5位id则为2级菜单，截取前3位为父菜单代码
+                        parentId = treeId.substring(0, 3);
+                        break;
+                    case 8:
+                        parentId = treeId.substring(0, 5);
+                        break;
+                    case 11:
+                        parentId = treeId.substring(0, 8);
+                        break;
+                    case 14:
+                        parentId = treeId.substring(0, 11);
+                        break;
+                    case 17:
+                        parentId = treeId.substring(0, 14);
+                        break;
+                    case 20://最深到7级菜单
+                        parentId = treeId.substring(0, 17);
+                        break;
+                    default:
+                        log.error("treeId 长度超出范围 ={}", treeId);
+                        break;
+
+                }
+
+                if ("0".equals(parentId)) {
+                    newInventoryClass.setParentCode("0");//直接设置，不用查询0父菜单
+                } else {
+                    for (InventoryClass ic : inventoryClasses) {
+                        if (parentId.equals(ic.getTreeId())) {
+                            newInventoryClass.setParentCode(ic.getCode());
+                            break;
+                        }
+                    }
+
+                }
+
+                newInventoryClasses.add(newInventoryClass);
+            }
+        }
+        //判断是否删除
+        for(YsInventoryClass ysInventoryClass : ysInventoryClasses) {
+            String ysCode = ysInventoryClass.getCode();
+            boolean isExist = inventoryClasses.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeInventoryClasses.add(ysInventoryClass);
+            }
+        }
+        //执行数据库操作
+        ysInventoryClassService.sync(newInventoryClasses, updateInventoryClasses, removeInventoryClasses);
+    }
 
     @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncUnit() {
@@ -55,9 +147,8 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新
                     if (!unit.getEditDate().isEqual(ysUnit.getEditDate())) {
-                        //更新暂时只有code,name
-                        ysUnit.setCode(code).setName(unit.getName())
-                                .setEditDate(unit.getEditDate());
+                        //更新暂时只有name
+                        ysUnit.setName(unit.getName()).setEditDate(unit.getEditDate());
                         updateUnits.add(ysUnit);
                     }
                     break;//找到后无需再循环
@@ -83,7 +174,7 @@ public class SynchApplication {
 
     }
 
-    //@Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncSize() {
         List<Size> sizes = sizeService.list();
         List<YsSize> ysSizes = ysSizeService.selectAll();
@@ -99,8 +190,8 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新
                     if (!size.getEditDate().isEqual(ysSize.getEditDate())) {
-                        //更新暂时只有code,name
-                        ysSize.setCode(code).setName(size.getName())
+                        //更新暂时只有name
+                        ysSize.setName(size.getName())
                                 .setEditDate(size.getEditDate());
                         updateSizes.add(ysSize);
                     }
@@ -127,7 +218,7 @@ public class SynchApplication {
 
     }
 
-    //@Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncColor() {
         List<Color> colors = colorService.list();
         List<YsColor> ysColors = ysColorService.selectAll();
@@ -143,9 +234,8 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新
                     if (!color.getEditDate().isEqual(ysColor.getEditDate())) {
-                        //更新暂时只有code,name
-                        ysColor.setCode(code).setName(color.getName())
-                                .setEditDate(color.getEditDate());
+                        //更新暂时只有name
+                        ysColor.setName(color.getName()).setEditDate(color.getEditDate());
                         updateColors.add(ysColor);
                     }
                     break;//找到后无需再循环
