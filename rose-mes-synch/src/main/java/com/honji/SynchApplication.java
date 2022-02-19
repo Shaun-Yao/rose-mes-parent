@@ -39,10 +39,74 @@ public class SynchApplication {
     @Autowired
     private IYsInventoryClassService ysInventoryClassService;
 
+    @Autowired
+    private IInventoryService inventoryService;
+    @Autowired
+    private IYsInventoryService ysInventoryService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
 
+    }
+
+    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    public void syncInventory() {
+        List<Inventory> inventoryes = inventoryService.list();
+        List<YsInventory> ysInventoryes = ysInventoryService.selectAll();
+        List<YsUnit> ysUnits = ysUnitService.selectAll();
+        List<YsInventory> newInventoryes = new ArrayList<>();
+        List<YsInventory> updateInventoryes = new ArrayList<>();
+        List<YsInventory> removeInventoryes = new ArrayList<>();
+        for(Inventory inventory : inventoryes) {
+            boolean isExist = false;
+            String code = inventory.getCode();
+            for (YsInventory ysInventory : ysInventoryes) {
+                String ysCode = ysInventory.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新,代码相同其它属性有修改
+                    if (!inventory.getEditDate().isEqual(ysInventory.getEditDate())) {
+                        //更新暂时只有name，editDate
+                        ysInventory.setName(inventory.getName())
+                                .setEditDate(inventory.getEditDate());
+                        updateInventoryes.add(ysInventory);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsInventory newInventory = new YsInventory().setCode(code)
+                        .setName(inventory.getName()).setEditDate(inventory.getEditDate());
+                String treeId = inventory.getTreeId();
+                String parentId = parseParentId(treeId);
+                String unitCode = inventory.getUnitId();
+                YsUnit unit = ysUnits.stream().filter(e -> unitCode.equals(e.getCode())).findAny().get();
+                newInventory.setUnitId(unit.getId());
+
+                if (parentId.equals("0")) {//空指针直接报错
+                    newInventory.setParentCode("0");//直接设置，不用查询0父菜单
+                } else {
+                    for (Inventory ic : inventoryes) {
+                        if (parentId.equals(ic.getTreeId())) {
+                            newInventory.setParentCode(ic.getCode());
+                            break;
+                        }
+                    }
+                }
+                newInventoryes.add(newInventory);
+            }
+        }
+        //判断是否删除
+        for(YsInventory ysInventory : ysInventoryes) {
+            String ysCode = ysInventory.getCode();
+            boolean isExist = inventoryes.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeInventoryes.add(ysInventory);
+            }
+        }
+        //执行数据库操作
+        ysInventoryService.sync(newInventoryes, updateInventoryes, removeInventoryes);
     }
 
     @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
@@ -75,36 +139,9 @@ public class SynchApplication {
                 YsInventoryClass newInventoryClass = new YsInventoryClass().setCode(code)
                         .setName(inventoryClass.getName()).setEditDate(inventoryClass.getEditDate());
                 String treeId = inventoryClass.getTreeId();
-                String parentId = null;
-                switch (treeId.length()) {
-                    case 3://3位id则为1级菜单，无父菜单
-                        parentId = "0";
-                        break;
-                    case 5://5位id则为2级菜单，截取前3位为父菜单代码
-                        parentId = treeId.substring(0, 3);
-                        break;
-                    case 8:
-                        parentId = treeId.substring(0, 5);
-                        break;
-                    case 11:
-                        parentId = treeId.substring(0, 8);
-                        break;
-                    case 14:
-                        parentId = treeId.substring(0, 11);
-                        break;
-                    case 17:
-                        parentId = treeId.substring(0, 14);
-                        break;
-                    case 20://最深到7级菜单
-                        parentId = treeId.substring(0, 17);
-                        break;
-                    default:
-                        log.error("treeId 长度超出范围 ={}", treeId);
-                        break;
+                String parentId = parseParentId(treeId);
 
-                }
-
-                if ("0".equals(parentId)) {
+                if (parentId.equals("0")) {//空指针直接报错
                     newInventoryClass.setParentCode("0");//直接设置，不用查询0父菜单
                 } else {
                     for (InventoryClass ic : inventoryClasses) {
@@ -113,9 +150,7 @@ public class SynchApplication {
                             break;
                         }
                     }
-
                 }
-
                 newInventoryClasses.add(newInventoryClass);
             }
         }
@@ -129,6 +164,38 @@ public class SynchApplication {
         }
         //执行数据库操作
         ysInventoryClassService.sync(newInventoryClasses, updateInventoryClasses, removeInventoryClasses);
+    }
+
+    private String parseParentId(String treeId) {
+        String parentId = null;
+        switch (treeId.length()) {
+            case 3://3位id则为1级菜单，无父菜单
+                parentId = "0";
+                break;
+            case 5://5位id则为2级菜单，截取前3位为父菜单代码
+                parentId = treeId.substring(0, 3);
+                break;
+            case 8:
+                parentId = treeId.substring(0, 5);
+                break;
+            case 11:
+                parentId = treeId.substring(0, 8);
+                break;
+            case 14:
+                parentId = treeId.substring(0, 11);
+                break;
+            case 17:
+                parentId = treeId.substring(0, 14);
+                break;
+            case 20://最深到7级菜单
+                parentId = treeId.substring(0, 17);
+                break;
+            default:
+                log.error("treeId 长度超出范围 ={}", treeId);
+                break;
+
+        }
+        return parentId;
     }
 
     @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次

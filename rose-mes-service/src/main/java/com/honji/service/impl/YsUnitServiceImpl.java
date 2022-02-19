@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@DS("mes")
 @Slf4j
 @Service
 public class YsUnitServiceImpl extends ServiceImpl<YsUnitMapper, YsUnit> implements IYsUnitService {
@@ -25,20 +26,25 @@ public class YsUnitServiceImpl extends ServiceImpl<YsUnitMapper, YsUnit> impleme
     @Autowired
     private IYsUnitService ysUnitService;
 
-    @DS("mes")
+
     @Override
     public List<YsUnit> selectAll() {
         QueryWrapper<YsUnit> queryWrapper = new QueryWrapper<>();
         return UnitMapper.selectList(queryWrapper);
     }
 
-    @DS("mes")
+    @Override
+    public YsUnit selectByCode(String code) {
+        QueryWrapper<YsUnit> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("unit_code", code);
+        return UnitMapper.selectOne(queryWrapper);
+    }
+
     @Override
     public void saveList(List<YsUnit> Units) {
        ysUnitService.saveBatch(Units);
     }
 
-    @DS("mes")
     @Transactional
     @Override
     public void sync(List<YsUnit> newUnits, List<YsUnit> updateUnits, List<YsUnit> removeUnits) {
