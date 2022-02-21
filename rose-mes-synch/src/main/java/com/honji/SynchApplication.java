@@ -44,10 +44,109 @@ public class SynchApplication {
     @Autowired
     private IYsInventoryService ysInventoryService;
 
+    @Autowired
+    private IProviderClassService providerClassService;
+    @Autowired
+    private IYsProviderClassService ysProviderClassService;
+
+    @Autowired
+    private IProviderService providerService;
+    @Autowired
+    private IYsProviderService ysProviderService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
 
+    }
+
+    @Scheduled(fixedDelay = 6000 * 1000)
+    public void syncProvider() {
+        List<Provider> providers = providerService.list();
+        List<YsProvider> ysProviders = ysProviderService.selectAll();
+        List<YsProvider> newProviders = new ArrayList<>();
+        List<YsProvider> updateProviders = new ArrayList<>();
+        List<YsProvider> removeProviders = new ArrayList<>();
+        for(Provider provider : providers) {
+            boolean isExist = false;
+            String code = provider.getCode();
+            for (YsProvider ysProvider : ysProviders) {
+                String ysCode = ysProvider.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新,代码相同其它属性有修改
+                    if (!provider.getEditDate().isEqual(ysProvider.getEditDate())) {
+                        //更新暂时只有name，editDate
+                        ysProvider.setName(provider.getName()).setShortName(provider.getShortName())
+                                .setParentCode(provider.getParentCode()).setEditDate(provider.getEditDate());
+                        updateProviders.add(ysProvider);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsProvider newProvider = new YsProvider().setCode(code)
+                        .setName(provider.getName()).setShortName(provider.getShortName())
+                        .setParentCode(provider.getParentCode())
+                        .setEditDate(provider.getEditDate());
+
+                newProviders.add(newProvider);
+            }
+        }
+        //判断是否删除
+        for(YsProvider ysProvider : ysProviders) {
+            String ysCode = ysProvider.getCode();
+            boolean isExist = providers.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeProviders.add(ysProvider);
+            }
+        }
+        //执行数据库操作
+        ysProviderService.sync(newProviders, updateProviders, removeProviders);
+    }
+
+    @Scheduled(fixedDelay = 6000 * 1000)
+    public void syncProviderClass() {
+        List<ProviderClass> providerClasses = providerClassService.list();
+        List<YsProviderClass> ysProviderClasses = ysProviderClassService.selectAll();
+        List<YsProviderClass> newProviderClasses = new ArrayList<>();
+        List<YsProviderClass> updateProviderClasses = new ArrayList<>();
+        List<YsProviderClass> removeProviderClasses = new ArrayList<>();
+        for(ProviderClass providerClass : providerClasses) {
+            boolean isExist = false;
+            String code = providerClass.getCode();
+            for (YsProviderClass ysProviderClass : ysProviderClasses) {
+                String ysCode = ysProviderClass.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新,代码相同其它属性有修改
+                    if (!providerClass.getEditDate().isEqual(ysProviderClass.getEditDate())) {
+                        //更新暂时只有name，editDate
+                        ysProviderClass.setName(providerClass.getName())
+                                .setEditDate(providerClass.getEditDate());
+                        updateProviderClasses.add(ysProviderClass);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsProviderClass newProviderClass = new YsProviderClass().setCode(code)
+                        .setName(providerClass.getName())
+                        .setEditDate(providerClass.getEditDate());
+
+                newProviderClasses.add(newProviderClass);
+            }
+        }
+        //判断是否删除
+        for(YsProviderClass ysProviderClass : ysProviderClasses) {
+            String ysCode = ysProviderClass.getCode();
+            boolean isExist = providerClasses.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removeProviderClasses.add(ysProviderClass);
+            }
+        }
+        //执行数据库操作
+        ysProviderClassService.sync(newProviderClasses, updateProviderClasses, removeProviderClasses);
     }
 
     @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
@@ -109,7 +208,7 @@ public class SynchApplication {
         ysInventoryService.sync(newInventoryes, updateInventoryes, removeInventoryes);
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+    @Scheduled(fixedDelay = 6000 * 1000)
     public void syncInventoryClass() {
         QueryWrapper<InventoryClass> queryWrapper = new QueryWrapper<>();
         queryWrapper.ne("seriesid", "1");//排队“货品分类”菜单
