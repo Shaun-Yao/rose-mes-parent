@@ -29,6 +29,12 @@ public class YsProvider {
     private String code;
 
     /**
+     * 20客户，21供应商，22客户/供应商
+     */
+    @TableField(value = "partnerType")
+    private int partnerType = 21;
+
+    /**
      * 父级编码
      */
     @TableField(value = "Partner_code")

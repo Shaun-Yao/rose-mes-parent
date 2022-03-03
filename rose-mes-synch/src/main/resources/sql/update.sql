@@ -20,3 +20,11 @@ ALTER TABLE YS_AA_Partner add edit_date datetime;
 UPDATE YS_AA_Partner SET edit_date = CONVERT ( VARCHAR (19), GETDATE(), 120)
 ALTER TABLE YS_AA_Partner ALTER COLUMN edit_date datetime not null;
 
+ALTER TABLE JY_PU_PurchaseOrder add edit_date datetime;
+UPDATE JY_PU_PurchaseOrder SET edit_date = CONVERT ( VARCHAR (19), GETDATE(), 120)
+ALTER TABLE JY_PU_PurchaseOrder ALTER COLUMN edit_date datetime not null;
+
+ALTER TABLE JY_PU_PurchaseOrder_b add edit_date datetime;
+UPDATE JY_PU_PurchaseOrder_b SET edit_date = CONVERT ( VARCHAR (19), GETDATE(), 120)
+ALTER TABLE JY_PU_PurchaseOrder_b ALTER COLUMN edit_date datetime not null;
+

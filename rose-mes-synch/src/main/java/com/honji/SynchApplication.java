@@ -2,6 +2,7 @@ package com.honji;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.honji.entity.*;
+import com.honji.entity.dto.PurchaseOrderListDTO;
 import com.honji.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.mybatis.spring.annotation.MapperScan;
@@ -13,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @SpringBootApplication
 @MapperScan("com.honji.mapper")
@@ -54,13 +56,142 @@ public class SynchApplication {
     @Autowired
     private IYsProviderService ysProviderService;
 
+    @Autowired
+    private IPurchaseOrderService purchaseOrderService;
+    @Autowired
+    private IYsPurchaseOrderService ysPurchaseOrderService;
+
+    @Autowired
+    private IPurchaseOrderListService purchaseOrderListService;
+    @Autowired
+    private IYsPurchaseOrderListService ysPurchaseOrderListService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
 
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)
+    //@Scheduled(fixedDelay = 6000 * 1000)
+    public void syncPurchaseOrderList() {
+        List<PurchaseOrderList> purchaseOrders = purchaseOrderListService.selectList();
+        purchaseOrders = purchaseOrders.subList(0, 1);//测试一条
+        List<YsPurchaseOrderList> ysPurchaseOrderLists = ysPurchaseOrderListService.selectAll();
+        List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
+        List<YsPurchaseOrderList> updatePurchaseOrderLists = new ArrayList<>();
+        List<YsPurchaseOrderList> removePurchaseOrderLists = new ArrayList<>();
+        List<YsInventory> ysInventories = ysInventoryService.selectAll();
+        List<YsPurchaseOrder> ysPurchaseOrders = ysPurchaseOrderService.selectAll();
+        for(PurchaseOrderList purchaseOrder : purchaseOrders) {
+            boolean isExist = false;
+            String id = purchaseOrder.getId();
+
+            for (YsPurchaseOrderList ysPurchaseOrderList : ysPurchaseOrderLists) {
+                String ysId = ysPurchaseOrderList.getIdb();
+                if (id.equals(ysId)) {
+                    isExist = true;
+                    //如果编辑日期不相等则有更新,代码相同其它属性有修改
+                    if (!purchaseOrder.getEditDate().isEqual(ysPurchaseOrderList.getEditDate())) {
+
+                        ysPurchaseOrderList.setParentId(purchaseOrder.getParentId())
+                                .setQuantity(purchaseOrder.getQuantity()).setPrice(purchaseOrder.getPrice())
+                                .setProjectCode(purchaseOrder.getProjectCode()).setAcceptDate(purchaseOrder.getAcceptDate())
+                                .setEditDate(purchaseOrder.getEditDate());
+                        updatePurchaseOrderLists.add(ysPurchaseOrderList);
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsPurchaseOrderList newPurchaseOrderList = new YsPurchaseOrderList().setIdb(purchaseOrder.getId())
+                        //.setParentId(purchaseOrder.getParentId())
+                        .setQuantity(purchaseOrder.getQuantity()).setPrice(purchaseOrder.getPrice())
+                        .setAmount(purchaseOrder.getAmount())
+                        .setProjectCode(purchaseOrder.getProjectCode()).setAcceptDate(purchaseOrder.getAcceptDate())
+                        .setEditDate(purchaseOrder.getEditDate());
+
+                String code = purchaseOrder.getInventoryId();
+                YsInventory ysInventory = ysInventories.stream().filter(e -> code.equals(e.getCode())).findAny().get();
+
+                String parentCode = purchaseOrder.getParentId();
+                log.warn("parentCode = {}", parentCode);
+                YsPurchaseOrder order = ysPurchaseOrders.stream().filter(e -> parentCode.equals(e.getCode())).findAny().get();
+                newPurchaseOrderList.setInventoryId(ysInventory.getId());
+                newPurchaseOrderList.setParentId(order.getId());
+                newPurchaseOrderLists.add(newPurchaseOrderList);
+            }
+        }
+        //判断是否删除
+        for(YsPurchaseOrderList ysPurchaseOrderList : ysPurchaseOrderLists) {
+            String ysId = ysPurchaseOrderList.getIdb();
+            boolean isExist = purchaseOrders.stream().filter(e -> ysId.equals(e.getId())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removePurchaseOrderLists.add(ysPurchaseOrderList);
+            }
+        }
+        //执行数据库操作
+        ysPurchaseOrderListService.sync(newPurchaseOrderLists, updatePurchaseOrderLists, removePurchaseOrderLists);
+    }
+
+//    @Scheduled(fixedDelay = 6000 * 1000)
+    public void syncPurchaseOrder() {
+        List<PurchaseOrder> purchaseOrders = purchaseOrderService.list();
+//        purchaseOrders = purchaseOrders.subList(0, 1);//测试一条
+        purchaseOrders = purchaseOrders.stream().filter(e->"PO2203-0024".equals(e.getCode()) || "PO2203-0055".equals(e.getCode()))
+                .collect(Collectors.toList());
+        log.warn("PurchaseOrder == {} and {}", purchaseOrders.get(0).getCode(), purchaseOrders.get(0).getCreateBy());
+        List<YsPurchaseOrder> ysPurchaseOrders = ysPurchaseOrderService.selectAll();
+        List<YsPurchaseOrder> newPurchaseOrders = new ArrayList<>();
+        List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
+        List<YsPurchaseOrder> updatePurchaseOrders = new ArrayList<>();
+        List<YsPurchaseOrder> removePurchaseOrders = new ArrayList<>();
+        List<YsProvider> providers = ysProviderService.selectAll();
+        List<YsInventory> ysInventories = ysInventoryService.selectAll();
+        for(PurchaseOrder purchaseOrder : purchaseOrders) {
+            boolean isExist = false;
+            String code = purchaseOrder.getCode();
+            for (YsPurchaseOrder ysPurchaseOrder : ysPurchaseOrders) {
+                String ysCode = ysPurchaseOrder.getCode();
+                if (code.equals(ysCode)) {
+                    isExist = true;
+                    //如果提交日期不相等则有更新
+                    if (!purchaseOrder.getCreateDate().isEqual(ysPurchaseOrder.getCreateDate())) {
+
+                        order2YsOrder(purchaseOrder, ysPurchaseOrder, providers);
+                        updatePurchaseOrders.add(ysPurchaseOrder);
+
+                        //主表提交日期有变更，则要更新关联子表记录，更新操作是先删除旧子表记录，这里加上新记录
+                        newPurchaseOrderLists.addAll(
+                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
+                        );
+                    }
+                    break;//找到后无需再循环
+                }
+            }
+            if (!isExist) {//不存在则添加
+                YsPurchaseOrder newPurchaseOrder = new YsPurchaseOrder();
+                order2YsOrder(purchaseOrder, newPurchaseOrder, providers);
+                newPurchaseOrders.add(newPurchaseOrder);
+                //主表有新记录，则要添加关联子表记录
+                newPurchaseOrderLists.addAll(
+                        parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
+                );
+            }
+        }
+        //判断是否删除
+        for(YsPurchaseOrder ysPurchaseOrder : ysPurchaseOrders) {
+            String ysCode = ysPurchaseOrder.getCode();
+            boolean isExist = purchaseOrders.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            if(!isExist) {//不存在则添加
+                removePurchaseOrders.add(ysPurchaseOrder);
+            }
+        }
+        //执行数据库操作
+        ysPurchaseOrderService.sync(newPurchaseOrders, newPurchaseOrderLists,
+                updatePurchaseOrders, removePurchaseOrders);
+    }
+
+    //@Scheduled(fixedDelay = 6000 * 1000)
     public void syncProvider() {
         List<Provider> providers = providerService.list();
         List<YsProvider> ysProviders = ysProviderService.selectAll();
@@ -69,7 +200,8 @@ public class SynchApplication {
         List<YsProvider> removeProviders = new ArrayList<>();
         for(Provider provider : providers) {
             boolean isExist = false;
-            String code = provider.getCode();
+            //rose查询数据后面有空格，必须trim
+            String code = provider.getCode().trim();
             for (YsProvider ysProvider : ysProviders) {
                 String ysCode = ysProvider.getCode();
                 if (code.equals(ysCode)) {
@@ -96,7 +228,8 @@ public class SynchApplication {
         //判断是否删除
         for(YsProvider ysProvider : ysProviders) {
             String ysCode = ysProvider.getCode();
-            boolean isExist = providers.stream().filter(e -> ysCode.equals(e.getCode())).findAny().isPresent();
+            //rose查询数据后面有空格，必须trim
+            boolean isExist = providers.stream().filter(e -> ysCode.equals(e.getCode().trim())).findAny().isPresent();
             if(!isExist) {//不存在则添加
                 removeProviders.add(ysProvider);
             }
@@ -105,7 +238,7 @@ public class SynchApplication {
         ysProviderService.sync(newProviders, updateProviders, removeProviders);
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)
+//    @Scheduled(fixedDelay = 6000 * 1000)
     public void syncProviderClass() {
         List<ProviderClass> providerClasses = providerClassService.list();
         List<YsProviderClass> ysProviderClasses = ysProviderClassService.selectAll();
@@ -208,7 +341,7 @@ public class SynchApplication {
         ysInventoryService.sync(newInventoryes, updateInventoryes, removeInventoryes);
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)
+//    @Scheduled(fixedDelay = 6000 * 1000)
     public void syncInventoryClass() {
         QueryWrapper<InventoryClass> queryWrapper = new QueryWrapper<>();
         queryWrapper.ne("seriesid", "1");//排队“货品分类”菜单
@@ -297,7 +430,7 @@ public class SynchApplication {
         return parentId;
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+//    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncUnit() {
         List<Unit> units = unitService.list();
         List<YsUnit> ysUnits = ysUnitService.selectAll();
@@ -340,7 +473,7 @@ public class SynchApplication {
 
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+//    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncSize() {
         List<Size> sizes = sizeService.list();
         List<YsSize> ysSizes = ysSizeService.selectAll();
@@ -384,7 +517,7 @@ public class SynchApplication {
 
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+//    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncColor() {
         List<Color> colors = colorService.list();
         List<YsColor> ysColors = ysColorService.selectAll();
@@ -425,5 +558,51 @@ public class SynchApplication {
         //执行数据库操作
         ysColorService.sync(newColors, updateColors, removeColors);
 
+    }
+
+    private void order2YsOrder(PurchaseOrder purchaseOrder, YsPurchaseOrder ysPurchaseOrder, List<YsProvider> providers) {
+        ysPurchaseOrder.setCode(purchaseOrder.getCode())
+                .setDate(purchaseOrder.getDate()).setAuditDate(purchaseOrder.getAuditDate())
+                .setWareHouse("1491700404601700352")//TODO 固定仓库id
+                .setCreateBy(purchaseOrder.getCreateBy()).setCreateDate(purchaseOrder.getCreateDate())
+                .setUpdateBy(purchaseOrder.getCreateBy()).setUpdateDate(purchaseOrder.getCreateDate())
+                .setEditDate(purchaseOrder.getEditDate());
+        String status = purchaseOrder.getStatus();
+        if("已审核".equals(status)) {
+            ysPurchaseOrder.setStatus("1");
+        } else {
+            ysPurchaseOrder.setStatus("0");
+        }
+        final String providerCode = purchaseOrder.getProviderCode();
+        YsProvider provider = providers.stream().filter(e -> providerCode.equals(e.getCode())).findAny().get();
+        ysPurchaseOrder.setPartnerId(provider.getId());
+
+    }
+
+    private List<YsPurchaseOrderList> parseYsPurchaseOrderList(String parentId, List<YsInventory> ysInventories,
+                                                               List<YsPurchaseOrder> ysPurchaseOrders) {
+        List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
+        QueryWrapper<PurchaseOrderList> queryWrapper = new QueryWrapper<>();
+//        queryWrapper.eq("poid", parentId);
+        List<PurchaseOrderListDTO> orderLists =  purchaseOrderListService.selectListByParentCode(parentId);
+        for(PurchaseOrderListDTO purchaseOrder : orderLists) {
+            YsPurchaseOrderList newPurchaseOrderList = new YsPurchaseOrderList().setIdb(purchaseOrder.getId())
+                    .setQuantity(purchaseOrder.getQuantity()).setPrice(purchaseOrder.getPrice())
+                    .setAmount(purchaseOrder.getAmount())
+                    .setProjectCode(purchaseOrder.getProjectCode()).setAcceptDate(purchaseOrder.getAcceptDate())
+                    .setEditDate(purchaseOrder.getEditDate());
+
+            String code = purchaseOrder.getInventoryId();
+            log.warn("InventoryId = {}", code);
+            YsInventory ysInventory = ysInventories.stream().filter(e -> code.equals(e.getCode())).findAny().get();
+
+            String parentCode = purchaseOrder.getParentId();
+            log.warn("parentCode = {}", parentCode);
+            YsPurchaseOrder order = ysPurchaseOrders.stream().filter(e -> parentCode.equals(e.getCode())).findAny().get();
+            newPurchaseOrderList.setInventoryId(ysInventory.getId());
+            newPurchaseOrderList.setParentId(order.getId());
+            newPurchaseOrderLists.add(newPurchaseOrderList);
+        }
+        return newPurchaseOrderLists;
     }
 }
