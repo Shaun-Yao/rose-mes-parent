@@ -299,33 +299,15 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新,代码相同其它属性有修改
                     if (!inventory.getEditDate().isEqual(ysInventory.getEditDate())) {
-                        //更新暂时只有name，editDate
-                        ysInventory.setName(inventory.getName())
-                                .setEditDate(inventory.getEditDate());
+                        inventory2YsInventory(inventory, ysInventory, ysUnits, inventoryes);
                         updateInventoryes.add(ysInventory);
                     }
                     break;//找到后无需再循环
                 }
             }
             if (!isExist) {//不存在则添加
-                YsInventory newInventory = new YsInventory().setCode(code)
-                        .setName(inventory.getName()).setEditDate(inventory.getEditDate());
-                String treeId = inventory.getTreeId();
-                String parentId = parseParentId(treeId);
-                String unitCode = inventory.getUnitId();
-                YsUnit unit = ysUnits.stream().filter(e -> unitCode.equals(e.getCode())).findAny().get();
-                newInventory.setUnitId(unit.getId());
-
-                if (parentId.equals("0")) {//空指针直接报错
-                    newInventory.setParentCode("0");//直接设置，不用查询0父菜单
-                } else {
-                    for (Inventory ic : inventoryes) {
-                        if (parentId.equals(ic.getTreeId())) {
-                            newInventory.setParentCode(ic.getCode());
-                            break;
-                        }
-                    }
-                }
+                YsInventory newInventory = new YsInventory().setCode(code);
+                inventory2YsInventory(inventory, newInventory, ysUnits, inventoryes);
                 newInventoryes.add(newInventory);
             }
         }
@@ -396,6 +378,33 @@ public class SynchApplication {
         }
         //执行数据库操作
         ysInventoryClassService.sync(newInventoryClasses, updateInventoryClasses, removeInventoryClasses);
+    }
+
+    private void inventory2YsInventory(Inventory inventory, YsInventory ysInventory,
+                                       List<YsUnit> ysUnits, List<Inventory> inventoryes) {
+        ysInventory.setName(inventory.getName()).setParentCode(inventory.getParentCode())
+                .setEditDate(inventory.getEditDate());
+//        String treeId = inventory.getTreeId();
+//        String parentId = parseParentId(treeId);
+        String unitCode = inventory.getUnitId();
+        YsUnit unit = ysUnits.stream().filter(e -> unitCode.equals(e.getCode())).findAny().get();
+        ysInventory.setUnitId(unit.getId());
+        if ("启用".equals(inventory.getStatus())) {
+            ysInventory.setStatus("0");
+        } else {
+            ysInventory.setStatus("2");
+        }
+
+//        if (parentId.equals("0")) {//空指针直接报错
+//            ysInventory.setParentCode("0");//直接设置，不用查询0父菜单
+//        } else {
+//            for (Inventory ic : inventoryes) {
+//                if (parentId.equals(ic.getTreeId())) {
+//                    ysInventory.setParentCode(ic.getCode());
+//                    break;
+//                }
+//            }
+//        }
     }
 
     private String parseParentId(String treeId) {

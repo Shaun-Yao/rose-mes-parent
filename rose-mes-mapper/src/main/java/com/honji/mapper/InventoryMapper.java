@@ -9,16 +9,18 @@ import java.util.List;
 public interface InventoryMapper extends BaseMapper<Inventory> {
 
     @Select({"<script>",
-            "SELECT result.code, result.name, unit.unitid as unit_id, series.treeId as tree_id, edit_date FROM ",
-            "(SELECT code, name, seriesid, mmf.editdate as edit_date,",
+            "SELECT result.code, result.name, seriesid as parentCode, unit.unitid as unit_id,",
+            " mmfstate as status, edit_date FROM ",
+            "(SELECT code, name, seriesid, mmfstate, mmf.editdate as edit_date,",
             "CASE when provmat.price is null then 0 else provmat.price END as price, ",
             "CASE when provmat.unit is null then mmf.unit else provmat.unit END as unit ",
             " FROM mmf LEFT JOIN ",
             "(SELECT matid, max(multprice) price, max(multunit) unit FROM provmat GROUP BY matid) provmat",
             " on mmf.matid = provmat.matid ",
-            ") result",
+            //"WHERE mmf.MMFState = '启用'",
+            " ) result",
             " join unit on result.unit = unit.name",
-            " join series on result.seriesid = series.seriesid",
+//            " join series on result.seriesid = series.seriesid",
             "</script>"})
     List<Inventory> selectList();
 }

@@ -57,7 +57,7 @@ public class YsInventoryServiceImpl extends ServiceImpl<YsInventoryMapper, YsInv
             log.info("YsInventory删除数量 == {}", removeInventoryes.size());
             List<String> codes = removeInventoryes.stream().map(YsInventory :: getCode).collect(Collectors.toList());
             QueryWrapper<YsInventory> queryWrapper = new QueryWrapper<>();
-            queryWrapper.in("inv_code", codes);
+            queryWrapper.in("inv_codeb", codes);
             ysInventoryService.remove(queryWrapper);
         }
 

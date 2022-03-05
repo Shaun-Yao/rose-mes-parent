@@ -32,9 +32,19 @@ public class Inventory {
     private String unitId;
 
     /**
+     * 父级目录代码
+     */
+    private String parentCode;
+
+    /**
      * 树id
      */
-    private String treeId;
+//    private String treeId;
+
+    /**
+     * 状态：启用，停用两种
+     */
+    private String status;
 
     /**
      * 修改日期
