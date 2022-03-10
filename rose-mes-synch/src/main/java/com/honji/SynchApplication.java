@@ -12,9 +12,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @SpringBootApplication
 @MapperScan("com.honji.mapper")
@@ -133,13 +133,15 @@ public class SynchApplication {
         ysPurchaseOrderListService.sync(newPurchaseOrderLists, updatePurchaseOrderLists, removePurchaseOrderLists);
     }
 
-//    @Scheduled(fixedDelay = 6000 * 1000)
+    @Scheduled(fixedDelay = 6000 * 1000)
     public void syncPurchaseOrder() {
-        List<PurchaseOrder> purchaseOrders = purchaseOrderService.list();
+        QueryWrapper<PurchaseOrder> queryWrapper = new QueryWrapper<>();
+        queryWrapper.gt("editdate", "2022-03-01");
+        List<PurchaseOrder> purchaseOrders = purchaseOrderService.list(queryWrapper);
 //        purchaseOrders = purchaseOrders.subList(0, 1);//测试一条
-        purchaseOrders = purchaseOrders.stream().filter(e->"PO2203-0024".equals(e.getCode()) || "PO2203-0055".equals(e.getCode()))
-                .collect(Collectors.toList());
-        log.warn("PurchaseOrder == {} and {}", purchaseOrders.get(0).getCode(), purchaseOrders.get(0).getCreateBy());
+//        purchaseOrders = purchaseOrders.stream()
+//                .filter(e->"PO2203-0024".equals(e.getCode()) || "PO2203-0111".equals(e.getCode()))
+//                .collect(Collectors.toList());
         List<YsPurchaseOrder> ysPurchaseOrders = ysPurchaseOrderService.selectAll();
         List<YsPurchaseOrder> newPurchaseOrders = new ArrayList<>();
         List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
@@ -154,12 +156,23 @@ public class SynchApplication {
                 String ysCode = ysPurchaseOrder.getCode();
                 if (code.equals(ysCode)) {
                     isExist = true;
-                    //如果提交日期不相等则有更新
-                    if (!purchaseOrder.getCreateDate().isEqual(ysPurchaseOrder.getCreateDate())) {
+                    LocalDateTime createDate = purchaseOrder.getCreateDate();
+                    //创建日期为Null属于撤回提交，只修改为未审核状态即可，等提交后再同步相关修改
+                    if(createDate == null) {
+                        //如是已审核则修改为未审核状态
+                        if (ysPurchaseOrder.getStatus().equals("1")) {
+                            ysPurchaseOrder.setStatus("0");
+                            updatePurchaseOrders.add(ysPurchaseOrder);
+                        }
+                        //TODO 已经撤回mes应控制不再对此间操作
+                        break;
+                    }
 
+                    //如果编辑日期或者提交日期不相等则有更新
+                    if (!purchaseOrder.getEditDate().isEqual(ysPurchaseOrder.getEditDate())
+                            || !createDate.isEqual(ysPurchaseOrder.getCreateDate())) {
                         order2YsOrder(purchaseOrder, ysPurchaseOrder, providers);
                         updatePurchaseOrders.add(ysPurchaseOrder);
-
                         //主表提交日期有变更，则要更新关联子表记录，更新操作是先删除旧子表记录，这里加上新记录
                         newPurchaseOrderLists.addAll(
                             parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
@@ -169,13 +182,17 @@ public class SynchApplication {
                 }
             }
             if (!isExist) {//不存在则添加
-                YsPurchaseOrder newPurchaseOrder = new YsPurchaseOrder();
-                order2YsOrder(purchaseOrder, newPurchaseOrder, providers);
-                newPurchaseOrders.add(newPurchaseOrder);
-                //主表有新记录，则要添加关联子表记录
-                newPurchaseOrderLists.addAll(
-                        parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
-                );
+                if (purchaseOrder.getCreateDate() != null) {//没有提交时间，mes也没有此记录，无须同步
+                    YsPurchaseOrder newPurchaseOrder = new YsPurchaseOrder();
+                    //id设置为单据方便了表关联
+                    newPurchaseOrder.setId(purchaseOrder.getCode());
+                    order2YsOrder(purchaseOrder, newPurchaseOrder, providers);
+                    newPurchaseOrders.add(newPurchaseOrder);
+                    //主表有新记录，则要添加关联子表记录
+                    newPurchaseOrderLists.addAll(
+                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
+                    );
+                }
             }
         }
         //判断是否删除
@@ -191,7 +208,7 @@ public class SynchApplication {
                 updatePurchaseOrders, removePurchaseOrders);
     }
 
-    //@Scheduled(fixedDelay = 6000 * 1000)
+//    @Scheduled(fixedDelay = 6000 * 1000)
     public void syncProvider() {
         List<Provider> providers = providerService.list();
         List<YsProvider> ysProviders = ysProviderService.selectAll();
@@ -282,7 +299,7 @@ public class SynchApplication {
         ysProviderClassService.sync(newProviderClasses, updateProviderClasses, removeProviderClasses);
     }
 
-    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
+//    @Scheduled(fixedDelay = 6000 * 1000)  //1分钟同步一次
     public void syncInventory() {
         List<Inventory> inventoryes = inventoryService.list();
         List<YsInventory> ysInventoryes = ysInventoryService.selectAll();
@@ -354,6 +371,16 @@ public class SynchApplication {
                         .setName(inventoryClass.getName()).setEditDate(inventoryClass.getEditDate());
                 String treeId = inventoryClass.getTreeId();
                 String parentId = parseParentId(treeId);
+                if (code.startsWith("K")) {//款式
+                    newInventoryClass.setType("1");
+                } else if (code.startsWith("M")) {//款式
+                    if (code.startsWith("M1")) {//主料
+                        newInventoryClass.setType("2");
+                    }
+                    if (code.startsWith("M2")) {//辅料
+                        newInventoryClass.setType("3");
+                    }
+                }
 
                 if (parentId.equals("0")) {//空指针直接报错
                     newInventoryClass.setParentCode("0");//直接设置，不用查询0父菜单
@@ -596,6 +623,7 @@ public class SynchApplication {
         List<PurchaseOrderListDTO> orderLists =  purchaseOrderListService.selectListByParentCode(parentId);
         for(PurchaseOrderListDTO purchaseOrder : orderLists) {
             YsPurchaseOrderList newPurchaseOrderList = new YsPurchaseOrderList().setIdb(purchaseOrder.getId())
+                    .setParentId(purchaseOrder.getParentId())
                     .setQuantity(purchaseOrder.getQuantity()).setPrice(purchaseOrder.getPrice())
                     .setAmount(purchaseOrder.getAmount())
                     .setProjectCode(purchaseOrder.getProjectCode()).setAcceptDate(purchaseOrder.getAcceptDate())
@@ -605,11 +633,10 @@ public class SynchApplication {
             log.warn("InventoryId = {}", code);
             YsInventory ysInventory = ysInventories.stream().filter(e -> code.equals(e.getCode())).findAny().get();
 
-            String parentCode = purchaseOrder.getParentId();
-            log.warn("parentCode = {}", parentCode);
-            YsPurchaseOrder order = ysPurchaseOrders.stream().filter(e -> parentCode.equals(e.getCode())).findAny().get();
+//            String parentCode = purchaseOrder.getParentId();
+//            YsPurchaseOrder order = ysPurchaseOrders.stream().filter(e -> parentCode.equals(e.getCode())).findAny().get();
             newPurchaseOrderList.setInventoryId(ysInventory.getId());
-            newPurchaseOrderList.setParentId(order.getId());
+//            newPurchaseOrderList.setParentId(order.getId());
             newPurchaseOrderLists.add(newPurchaseOrderList);
         }
         return newPurchaseOrderLists;

@@ -40,6 +40,12 @@ public class YsInventoryClass {
     @TableField(value = "inv_name")
     private String name;
 
+    /**
+     * 类型：1成品、2主料、3辅料
+     */
+    @TableField(value = "InvNature")
+    private String type;
+
     private short treeSort = 0;
     private String treeSorts = "";//默认空字符串就行
     private String treeLeaf = "";//默认空字符串就行

@@ -13,7 +13,7 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
             " mmfstate as status, edit_date FROM ",
             "(SELECT code, name, seriesid, mmfstate, mmf.editdate as edit_date,",
             "CASE when provmat.price is null then 0 else provmat.price END as price, ",
-            "CASE when provmat.unit is null then mmf.unit else provmat.unit END as unit ",
+            "CASE when provmat.unit is null or provmat.unit = ''  then mmf.unit else provmat.unit END as unit ",
             " FROM mmf LEFT JOIN ",
             "(SELECT matid, max(multprice) price, max(multunit) unit FROM provmat GROUP BY matid) provmat",
             " on mmf.matid = provmat.matid ",

@@ -1,8 +1,6 @@
 package com.honji.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,7 +17,11 @@ import java.time.LocalDateTime;
 public class YsPurchaseOrder {
 
 
-    @TableId(type = IdType.ASSIGN_ID)
+
+    //@TableId(type = IdType.ASSIGN_ID)
+    /**
+     * 手动设置与code相同，方便子表关联
+     */
     private String id;
 
     /**
@@ -77,8 +79,8 @@ public class YsPurchaseOrder {
     /**
      * 到货日期
      */
-    @TableField(value = "acceptdate")
-    private LocalDateTime confirmDate;
+//    @TableField(value = "acceptdate")
+//    private LocalDateTime confirmDate;
 
     /**
      * 审核日期
