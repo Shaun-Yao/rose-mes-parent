@@ -13,33 +13,29 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@TableName(value = "YS_Colour")
-public class YsColor {
-    /**
-     * 与编码一致
-     */
-    @TableField
-    private String id;
+@TableName(value = "locate")
+public class Warehouse {
 
     /**
      * 编码
      */
+    @TableField(value = "locateid")
     private String code;
 
     /**
-     * 名字
+     * 全名
      */
     private String name;
 
     /**
-     * 是否使用，默认人0
+     * 地址
      */
-    @TableField(value = "isuse")
-    private short isUse = 0;
+    private String address;
+
 
     /**
      * 修改日期
      */
-
+    @TableField(value = "EditDate")
     private LocalDateTime editDate;
 }

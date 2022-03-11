@@ -1,6 +1,5 @@
 package com.honji.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -18,8 +17,10 @@ import java.time.LocalDateTime;
 @TableName(value = "YS_AA_Partner")
 public class YsProvider {
 
-
-    @TableId(type = IdType.ASSIGN_ID)
+    /**
+     * 与编码一致
+     */
+    @TableId
     private String id;
 
     /**

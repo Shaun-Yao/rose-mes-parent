@@ -52,6 +52,18 @@ public class YsPurchaseOrderList {
 
 
     /**
+     * 颜色
+     */
+    private String color;
+
+    /**
+     * 规格
+     */
+    @TableField(value = "batchNumber")
+    private String batchNumber;
+
+
+    /**
      * 到货日期
      */
     @TableField(value = "acceptDate")

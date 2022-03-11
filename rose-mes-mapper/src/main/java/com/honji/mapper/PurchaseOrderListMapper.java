@@ -28,7 +28,7 @@ public interface PurchaseOrderListMapper extends BaseMapper<PurchaseOrderList> {
     List<PurchaseOrderList> list();
 
     @Select({"<script>",
-            "SELECT polist.id, poid as parentId, mmf.code as inventoryId, ",
+            "SELECT polist.id, poid as parentId, mmf.code as inventoryId, polist.color, polist.model as size, ",
             "multqty as quantity, multprice as price, multtotal as amount,",
             "deliverDate as acceptDate, projectCode, polist.editdate",
             "FROM polist JOIN mmf on polist.matid = mmf.matid ",

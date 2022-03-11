@@ -32,6 +32,18 @@ public class PurchaseOrderList {
 
 
     /**
+     * 颜色
+     */
+    private String color;
+
+    /**
+     * 规格
+     */
+    @TableField(value = "model")
+    private String number;
+
+
+    /**
      * 数量
      */
     @TableField(value = "multqty")

@@ -66,6 +66,11 @@ public class SynchApplication {
     @Autowired
     private IYsPurchaseOrderListService ysPurchaseOrderListService;
 
+    @Autowired
+    private IWarehouseService warehouseService;
+    @Autowired
+    private IYsWarehouseService ysWarehouseService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(SynchApplication.class, args);
@@ -147,7 +152,7 @@ public class SynchApplication {
         List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
         List<YsPurchaseOrder> updatePurchaseOrders = new ArrayList<>();
         List<YsPurchaseOrder> removePurchaseOrders = new ArrayList<>();
-        List<YsProvider> providers = ysProviderService.selectAll();
+//        List<YsProvider> providers = ysProviderService.selectAll();
         List<YsInventory> ysInventories = ysInventoryService.selectAll();
         for(PurchaseOrder purchaseOrder : purchaseOrders) {
             boolean isExist = false;
@@ -171,11 +176,11 @@ public class SynchApplication {
                     //如果编辑日期或者提交日期不相等则有更新
                     if (!purchaseOrder.getEditDate().isEqual(ysPurchaseOrder.getEditDate())
                             || !createDate.isEqual(ysPurchaseOrder.getCreateDate())) {
-                        order2YsOrder(purchaseOrder, ysPurchaseOrder, providers);
+                        order2YsOrder(purchaseOrder, ysPurchaseOrder);
                         updatePurchaseOrders.add(ysPurchaseOrder);
                         //主表提交日期有变更，则要更新关联子表记录，更新操作是先删除旧子表记录，这里加上新记录
                         newPurchaseOrderLists.addAll(
-                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
+                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories)
                         );
                     }
                     break;//找到后无需再循环
@@ -186,11 +191,11 @@ public class SynchApplication {
                     YsPurchaseOrder newPurchaseOrder = new YsPurchaseOrder();
                     //id设置为单据方便了表关联
                     newPurchaseOrder.setId(purchaseOrder.getCode());
-                    order2YsOrder(purchaseOrder, newPurchaseOrder, providers);
+                    order2YsOrder(purchaseOrder, newPurchaseOrder);
                     newPurchaseOrders.add(newPurchaseOrder);
                     //主表有新记录，则要添加关联子表记录
                     newPurchaseOrderLists.addAll(
-                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories, ysPurchaseOrders)
+                            parseYsPurchaseOrderList(purchaseOrder.getCode(), ysInventories)
                     );
                 }
             }
@@ -206,6 +211,16 @@ public class SynchApplication {
         //执行数据库操作
         ysPurchaseOrderService.sync(newPurchaseOrders, newPurchaseOrderLists,
                 updatePurchaseOrders, removePurchaseOrders);
+    }
+
+
+    //@Scheduled(fixedDelay = 6000 * 1000)
+    public void syncWarehouse() {
+        QueryWrapper<Warehouse> queryWrapper = new QueryWrapper<>();
+        queryWrapper.ne("locateid", "1");//过虑总仓
+        List<Warehouse> warehouses = warehouseService.list(queryWrapper);
+        //执行数据库操作
+        ysWarehouseService.sync(warehouses);
     }
 
 //    @Scheduled(fixedDelay = 6000 * 1000)
@@ -234,7 +249,7 @@ public class SynchApplication {
                 }
             }
             if (!isExist) {//不存在则添加
-                YsProvider newProvider = new YsProvider().setCode(code)
+                YsProvider newProvider = new YsProvider().setId(code).setCode(code)
                         .setName(provider.getName()).setShortName(provider.getShortName())
                         .setParentCode(provider.getParentCode())
                         .setEditDate(provider.getEditDate());
@@ -303,7 +318,7 @@ public class SynchApplication {
     public void syncInventory() {
         List<Inventory> inventoryes = inventoryService.list();
         List<YsInventory> ysInventoryes = ysInventoryService.selectAll();
-        List<YsUnit> ysUnits = ysUnitService.selectAll();
+//        List<YsUnit> ysUnits = ysUnitService.selectAll();
         List<YsInventory> newInventoryes = new ArrayList<>();
         List<YsInventory> updateInventoryes = new ArrayList<>();
         List<YsInventory> removeInventoryes = new ArrayList<>();
@@ -316,15 +331,15 @@ public class SynchApplication {
                     isExist = true;
                     //如果编辑日期不相等则有更新,代码相同其它属性有修改
                     if (!inventory.getEditDate().isEqual(ysInventory.getEditDate())) {
-                        inventory2YsInventory(inventory, ysInventory, ysUnits, inventoryes);
+                        inventory2YsInventory(inventory, ysInventory);
                         updateInventoryes.add(ysInventory);
                     }
                     break;//找到后无需再循环
                 }
             }
             if (!isExist) {//不存在则添加
-                YsInventory newInventory = new YsInventory().setCode(code);
-                inventory2YsInventory(inventory, newInventory, ysUnits, inventoryes);
+                YsInventory newInventory = new YsInventory().setId(code).setCode(code);
+                inventory2YsInventory(inventory, newInventory);
                 newInventoryes.add(newInventory);
             }
         }
@@ -407,31 +422,15 @@ public class SynchApplication {
         ysInventoryClassService.sync(newInventoryClasses, updateInventoryClasses, removeInventoryClasses);
     }
 
-    private void inventory2YsInventory(Inventory inventory, YsInventory ysInventory,
-                                       List<YsUnit> ysUnits, List<Inventory> inventoryes) {
+    private void inventory2YsInventory(Inventory inventory, YsInventory ysInventory) {
         ysInventory.setName(inventory.getName()).setParentCode(inventory.getParentCode())
-                .setEditDate(inventory.getEditDate());
-//        String treeId = inventory.getTreeId();
-//        String parentId = parseParentId(treeId);
-        String unitCode = inventory.getUnitId();
-        YsUnit unit = ysUnits.stream().filter(e -> unitCode.equals(e.getCode())).findAny().get();
-        ysInventory.setUnitId(unit.getId());
+                .setUnitId(inventory.getUnitId()).setEditDate(inventory.getEditDate());
         if ("启用".equals(inventory.getStatus())) {
             ysInventory.setStatus("0");
         } else {
             ysInventory.setStatus("2");
         }
 
-//        if (parentId.equals("0")) {//空指针直接报错
-//            ysInventory.setParentCode("0");//直接设置，不用查询0父菜单
-//        } else {
-//            for (Inventory ic : inventoryes) {
-//                if (parentId.equals(ic.getTreeId())) {
-//                    ysInventory.setParentCode(ic.getCode());
-//                    break;
-//                }
-//            }
-//        }
     }
 
     private String parseParentId(String treeId) {
@@ -490,7 +489,7 @@ public class SynchApplication {
                 }
             }
             if(!isExist) {//不存在则添加
-                YsUnit newUnit = new YsUnit().setCode(code)
+                YsUnit newUnit = new YsUnit().setId(code).setCode(code)
                         .setName(unit.getName()).setEditDate(unit.getEditDate());
                 newUnits.add(newUnit);
             }
@@ -577,7 +576,7 @@ public class SynchApplication {
                 }
             }
             if(!isExist) {//不存在则添加
-                YsColor newColor = new YsColor().setCode(code)
+                YsColor newColor = new YsColor().setId(code).setCode(code)
                         .setName(color.getName()).setEditDate(color.getEditDate());
                 newColors.add(newColor);
             }
@@ -596,10 +595,10 @@ public class SynchApplication {
 
     }
 
-    private void order2YsOrder(PurchaseOrder purchaseOrder, YsPurchaseOrder ysPurchaseOrder, List<YsProvider> providers) {
-        ysPurchaseOrder.setCode(purchaseOrder.getCode())
+    private void order2YsOrder(PurchaseOrder purchaseOrder, YsPurchaseOrder ysPurchaseOrder) {
+        ysPurchaseOrder.setCode(purchaseOrder.getCode()).setPartnerId(purchaseOrder.getProviderCode())
                 .setDate(purchaseOrder.getDate()).setAuditDate(purchaseOrder.getAuditDate())
-                .setWareHouse("1491700404601700352")//TODO 固定仓库id
+                .setWareHouse(purchaseOrder.getWareHouse())
                 .setCreateBy(purchaseOrder.getCreateBy()).setCreateDate(purchaseOrder.getCreateDate())
                 .setUpdateBy(purchaseOrder.getCreateBy()).setUpdateDate(purchaseOrder.getCreateDate())
                 .setEditDate(purchaseOrder.getEditDate());
@@ -609,23 +608,21 @@ public class SynchApplication {
         } else {
             ysPurchaseOrder.setStatus("0");
         }
-        final String providerCode = purchaseOrder.getProviderCode();
-        YsProvider provider = providers.stream().filter(e -> providerCode.equals(e.getCode())).findAny().get();
-        ysPurchaseOrder.setPartnerId(provider.getId());
+//        final String providerCode = purchaseOrder.getProviderCode();
+//        YsProvider provider = providers.stream().filter(e -> providerCode.equals(e.getCode())).findAny().get();
+//        ysPurchaseOrder.setPartnerId(provider.getId());
 
     }
 
-    private List<YsPurchaseOrderList> parseYsPurchaseOrderList(String parentId, List<YsInventory> ysInventories,
-                                                               List<YsPurchaseOrder> ysPurchaseOrders) {
+    private List<YsPurchaseOrderList> parseYsPurchaseOrderList(String parentId, List<YsInventory> ysInventories) {
         List<YsPurchaseOrderList> newPurchaseOrderLists = new ArrayList<>();
-        QueryWrapper<PurchaseOrderList> queryWrapper = new QueryWrapper<>();
-//        queryWrapper.eq("poid", parentId);
         List<PurchaseOrderListDTO> orderLists =  purchaseOrderListService.selectListByParentCode(parentId);
         for(PurchaseOrderListDTO purchaseOrder : orderLists) {
             YsPurchaseOrderList newPurchaseOrderList = new YsPurchaseOrderList().setIdb(purchaseOrder.getId())
                     .setParentId(purchaseOrder.getParentId())
                     .setQuantity(purchaseOrder.getQuantity()).setPrice(purchaseOrder.getPrice())
                     .setAmount(purchaseOrder.getAmount())
+                    .setColor(purchaseOrder.getColor()).setBatchNumber(purchaseOrder.getSize())
                     .setProjectCode(purchaseOrder.getProjectCode()).setAcceptDate(purchaseOrder.getAcceptDate())
                     .setEditDate(purchaseOrder.getEditDate());
 
@@ -633,10 +630,7 @@ public class SynchApplication {
             log.warn("InventoryId = {}", code);
             YsInventory ysInventory = ysInventories.stream().filter(e -> code.equals(e.getCode())).findAny().get();
 
-//            String parentCode = purchaseOrder.getParentId();
-//            YsPurchaseOrder order = ysPurchaseOrders.stream().filter(e -> parentCode.equals(e.getCode())).findAny().get();
             newPurchaseOrderList.setInventoryId(ysInventory.getId());
-//            newPurchaseOrderList.setParentId(order.getId());
             newPurchaseOrderLists.add(newPurchaseOrderList);
         }
         return newPurchaseOrderLists;

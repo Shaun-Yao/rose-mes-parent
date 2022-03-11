@@ -43,6 +43,16 @@ public class PurchaseOrderListDTO {
 
 
     /**
+     * 颜色
+     */
+    private String color;
+
+    /**
+     * 规格
+     */
+    private String size;
+
+    /**
      * 发货日期
      */
     private LocalDateTime acceptDate;
